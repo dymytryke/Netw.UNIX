@@ -4,6 +4,9 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 void print_usage(const char *prog_name)
 {
@@ -43,8 +46,22 @@ int is_valid_port(const char *port)
             return 0; // Contains non-numeric character
         }
     }
-    return 1; // Valid numeric port
+    
+    int port_num = atoi(port);
+    return (port_num >= 0 && port_num <= 65535); // Valid port range
 }
+
+// Function to print protocol info
+void print_protocol_info(int protocol)
+{
+    struct protoent *proto = getprotobynumber(protocol);
+    printf("Protocol: %d", protocol);
+    if (proto != NULL) {
+        printf(" (%s)", proto->p_name);
+    }
+    printf("\n");
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -115,5 +132,95 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Prepare hints for getaddrinfo
+    struct addrinfo hints, *result, *rp;
+    memset(&hints, 0, sizeof(struct addrinfo));
     
+    if (ip_version == 4)
+        hints.ai_family = AF_INET;    // IPv4
+    else if (ip_version == 6)
+        hints.ai_family = AF_INET6;   // IPv6
+    else
+        hints.ai_family = AF_UNSPEC;  // Allow any address family
+        
+    hints.ai_socktype = SOCK_STREAM;
+    
+    if (only_numeric) {
+        hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV; // Numeric host and service
+    }
+
+    // Get address info
+    int status = getaddrinfo(hostname, port, &hints, &result);
+    if (status != 0) {
+        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+        return 1;
+    }
+
+    // Print the results
+    printf("Results for %s:%s\n", hostname, port);
+    printf("------------------------\n");
+    
+    for (rp = result; rp != NULL; rp = rp->ai_next) {
+        char addrstr[INET6_ADDRSTRLEN];
+        void *addr;
+        int port_num;
+        
+        // Get the pointer to the address itself
+        if (rp->ai_family == AF_INET) { // IPv4
+            struct sockaddr_in *ipv4 = (struct sockaddr_in *)rp->ai_addr;
+            addr = &(ipv4->sin_addr);
+            port_num = ntohs(ipv4->sin_port);
+            printf("IPv4 Address: ");
+        } else { // IPv6
+            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)rp->ai_addr;
+            addr = &(ipv6->sin6_addr);
+            port_num = ntohs(ipv6->sin6_port);
+            printf("IPv6 Address: ");
+        }
+        
+        // Convert IP to string
+        inet_ntop(rp->ai_family, addr, addrstr, sizeof(addrstr));
+        printf("%s\n", addrstr);
+        
+        // Print port
+        printf("Port: %d\n", port_num);
+        
+        // Print protocol info
+        print_protocol_info(rp->ai_protocol);
+        
+        // If -d is specified, try to resolve hostname
+        if (show_domain) {
+            struct sockaddr_storage temp_addr;
+            memcpy(&temp_addr, rp->ai_addr, rp->ai_addrlen);
+            char host[NI_MAXHOST];
+            
+            if (getnameinfo((struct sockaddr*)&temp_addr, rp->ai_addrlen, 
+                           host, NI_MAXHOST, NULL, 0, 0) == 0) {
+                printf("Hostname: %s\n", host);
+            } else {
+                printf("Hostname: Unable to resolve\n");
+            }
+        }
+        
+        // If -s is specified, try to resolve service name
+        if (show_service) {
+            struct servent *service = getservbyport(htons(port_num), 
+                                                 (rp->ai_socktype == SOCK_DGRAM) ? "udp" : "tcp");
+            if (service != NULL) {
+                printf("Service: %s\n", service->s_name);
+            } else {
+                printf("Service: Unknown\n");
+            }
+        }
+        
+        printf("Socket type: %s\n", 
+              (rp->ai_socktype == SOCK_STREAM) ? "SOCK_STREAM" :
+              (rp->ai_socktype == SOCK_DGRAM) ? "SOCK_DGRAM" :
+              (rp->ai_socktype == SOCK_RAW) ? "SOCK_RAW" : "Unknown");
+              
+        printf("------------------------\n");
+    }
+
+    freeaddrinfo(result);
+    return 0;
 }
