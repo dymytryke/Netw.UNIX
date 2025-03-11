@@ -10,7 +10,7 @@
 
 ## Лаб 3
 
-**TBD**
+[Lab3](3/documents/Lab3.md)
 
 ## Лаб 4
 
