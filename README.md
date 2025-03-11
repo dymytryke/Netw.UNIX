@@ -6,7 +6,7 @@
 
 ## Лаб 2
 
-**TBD**
+[Lab2](2/documents/Lab2.md)
 
 ## Лаб 3
 
