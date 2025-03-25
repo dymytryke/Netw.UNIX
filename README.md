@@ -14,4 +14,4 @@
 
 ## Лаб 4
 
-[Lab4](4/documents/Lab4.md)
+[Lab4](4/docs/Lab4.md)
