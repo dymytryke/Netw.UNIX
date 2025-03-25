@@ -14,4 +14,4 @@
 
 ## Лаб 4
 
-**TBD**
+[Lab4](4/documents/Lab4.md)
